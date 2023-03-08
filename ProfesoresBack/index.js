@@ -1,0 +1,276 @@
+const mysql = require('mysql2');
+const express = require('express');
+const bodyParser = require('body-parser');
+var cors = require('cors');
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
+const fileUpload = require('express-fileupload');
+
+const app = express();
+const port = 5000;
+const saltRounds = 10;
+const myPlaintextPassword = 's0/\/\P4$$w0rDñ';
+
+app.use(bodyParser.json());
+app.use(cors());
+app.use(fileUpload());
+
+app.use('/img',express.static(__dirname+'/imagenes'));
+
+const db = mysql.createConnection({
+  host: "localhost",
+  user: "root",
+  database: "tutorias1",
+  password: "",
+});
+
+// 	user: "tutorias_user",
+//   password: "b)G6GPq)ZcqCtmP!",
+
+app.get('/',(req,res) => {
+	res.send('Hola mundo!!!');
+});
+
+app.post('/profesores/agregar', (req, res)=> {
+	const {
+		clave,
+		nombres,
+		apellidos,
+		fNacimiento,
+		email,
+		sexo,
+		estadoCivil,
+		tCasa,
+		curp,
+		tCelular,
+		calle,
+		colonia,
+		cp,
+		municipio,
+		estado,
+		password,
+	} = req.body;
+
+	bcrypt.hash(password, saltRounds, (err, hash) => {
+    const sql =
+      "INSERT INTO profesores (clave, nombres, apellidos, fnacimiento, email,	sexo, estadocivil, tcasa, curp, tcelular, calle, colonia, cp, municipio, estado, estatus, password, foto) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
+    db.query(
+      sql,
+      [
+        clave,
+        nombres,
+        apellidos,
+        new Date(fNacimiento),
+        email,
+        sexo,
+        estadoCivil,
+        tCasa,
+        curp,
+        tCelular,
+        calle,
+        colonia,
+        cp,
+        municipio,
+        estado,
+        "inactivo",
+		hash,
+		"default.png",
+      ],
+      (err, result) => {
+        if (err) {
+          res.send({
+            status: 100,
+            errNo: err.errno,
+            mensaje: err.message,
+            codigo: err.code,
+          });
+        } else {
+          res.send({
+            status: 200,
+            resultado: result,
+          });
+        }
+      }
+    );
+  });
+	
+});
+app.get('/profesores', (req, res)=>{
+	const sql = 'SELECT * FROM profesores';
+	db.query(sql, (err,result, fields)=>{
+		if(!err) {
+			res.send({
+				status:200,
+				result,
+			});
+		}else {
+			res.send({
+				status:400,
+				result:{},
+			});
+		}
+	});
+});
+app.post('/profesores/modificar', (req, res)=>{
+	console.log(req.body);
+	const { clave, nombres,	apellidos, fNacimiento,	email, sexo, estadoCivil, tCasa, curp, tCelular, calle, colonia, cp, municipio, estado } = req.body;
+	const sql = "UPDATE profesores SET nombres=?, apellidos=?, fnacimiento=?, email=?, sexo=?, estadocivil=?, tcasa=?, curp=?, tcelular=?, calle=?, colonia=?, cp=?, municipio=?, estado=? WHERE clave=?";
+	db.query(sql, [nombres,	apellidos, fNacimiento,	email, sexo, estadoCivil, tCasa, curp, tCelular, calle, colonia, cp, municipio, estado, clave], (err, result)=>{
+		if(!err) {
+			res.send({
+				status:200,
+				result,
+			});
+		}else {
+			res.send({
+				status:400,
+				result:err,
+			});
+		}
+	})
+});
+app.get('/profesor/:clave',(req,res)=>{
+	const {clave} = req.params;
+
+	const sql = 'SELECT * from profesores WHERE clave = ?';
+	db.query(sql, [clave], (err, result)=>{
+		if(!err) {
+			res.send({
+				status:200,
+				result,
+			});
+		}else {
+			res.send({
+				status:400,
+				result:{},
+			});
+		}
+	})
+
+});
+app.get('/profesor/eliminar/:clave', (req, res)=>{
+	const {clave} = req.params;
+
+	const sql = 'DELETE FROM profesores WHERE clave = ?';
+	db.query(sql, [clave], (err, result)=>{
+		if(!err) {
+			res.send({
+				status:200,
+				result,
+			});
+		}else {
+			res.send({
+				status:400,
+				result:{},
+			});
+		}
+	});
+});
+app.post('/profesores/acceder', (req, res)=>{
+	const { clave, password } = req.body;
+
+	sql = 'SELECT * FROM profesores WHERE clave = ?';
+	db.query(sql, [clave], (err, result)=>{
+		if(err) {
+			return(
+				res.send({
+					status:401,
+					auth:false,
+					err,
+					mensaje:'Problemas con el servidor - contacte al administrador',
+				})
+			)
+		}
+		if(result.length>0){
+
+			bcrypt.compare(password, result[0].password, (err1, result1) => {
+				if(err1) {
+					return(
+						res.send({
+							status:102,
+							auth:false,
+							err1,
+							mensaje:'Problemas con el servidor - contacte al administrador',
+						})
+					)
+				}
+				if(result1) {
+					const clave = result[0].clave;
+					const nombres = result[0].nombres;
+					const apellidos = result[0].apellidos;
+					const estatus = result[0].estatus;
+					const foto = result[0].foto;
+					const token = jwt.sign({clave}, myPlaintextPassword, {
+						expiresIn:"1 day",
+					});
+					res.send({
+						status:200,
+						auth:true,
+						resultado:{clave, nombres, apellidos, estatus, foto, token},
+						mensaje:'Datos correctos',
+					});
+
+				}else {
+					res.send({
+						status:103,
+						auth:false,
+						mensaje:'Password incorrecto',
+					})
+
+				}
+			})
+
+
+
+		}else {
+			res.send({
+				status:101,
+				auth:false,
+				result,
+				mensaje:'El usuario no existe',
+			})
+		}
+	});
+});
+const verifyToken = (req, res, next) => {
+	const token = req.headers["x-access-token"] ? req.headers["x-access-token"] : '';
+	jwt.verify(token, myPlaintextPassword, (err, decoded)=>{
+		if (!err) {
+			req.clave = decoded.clave;
+			req.auth = true;
+			next();
+		}else {
+			res.send({
+				status:100,
+				auth:false,
+				err,
+				mensaje:'no estas autentificado'
+			})
+		}
+	})
+
+};
+app.get('/profesor/traer/token', verifyToken, (req,res)=>{
+	const { clave } = req;
+	const sql = 'SELECT * from profesores WHERE clave = ?';
+	db.query(sql, [clave], (err, result)=>{
+		if(!err) {
+			res.send({
+				status:200,
+				result,
+			});
+		}else {
+			res.send({
+				status:400,
+				result:{},
+			});
+		}
+	})
+});
+app.all('*', (req,res)=>{
+	res.send('Esta ruta no existe');
+});
+
+app.listen(port, ()=>{
+	console.log(`Escuchando por el puerto ${port}`);
+});
