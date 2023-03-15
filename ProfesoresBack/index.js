@@ -5,6 +5,7 @@ var cors = require('cors');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const fileUpload = require('express-fileupload');
+const path = require('path');
 
 const app = express();
 const port = 5000;
@@ -30,7 +31,6 @@ const db = mysql.createConnection({
 app.get('/',(req,res) => {
 	res.send('Hola mundo!!!');
 });
-
 app.post('/profesores/agregar', (req, res)=> {
 	const {
 		clave,
@@ -267,10 +267,88 @@ app.get('/profesor/traer/token', verifyToken, (req,res)=>{
 		}
 	})
 });
+app.post('/profesor/foto/subir', (req, res) => {
+	const file = req.files;
+	const { clave, foto} = req.body;
+	const mensaje = eliminarFoto(foto)
+	//res.status(200).send(mensaje)
+	if(!file || Object.keys(req.files).length==0){
+		return(
+			res.status(101).send({
+				mensaje:"no se adjunto la fotografia"
+			})
+		)
+	}
+	const archivo = req.files.archivo
+	const nombreArchivo = clave+path.extname(archivo.name);
+	const nombreArchivo2 = (foto===nombreArchivo) ? clave + '_1'+ path.extname(archivo.name): nombreArchivo;
+	const uploadPath = __dirname + '/imagenes/' + nombreArchivo2;
+	archivo.mv(uploadPath,(err) =>{
+		if(err){
+			return(
+				res.status(101).send({
+					mensaje: "No fue posible subir la fotografia, favor de contactar al administrador"
+				})
+			)
+		}
+		const sql = 'UPDATE profesores SET foto = ? WHERE clave = ?'
+		db.query(sql, [nombreArchivo, clave], (err1, res1) =>{
+			if(err1){
+				return(
+					res.status(102).send({
+						mensaje:'Se ha subido la fotografia de manera exitosa',
+						mensajeFoto:'No fue posible actualizar la base de datos, contacte al administrador',
+						resultado:err1,
+
+					})
+				)
+			}
+			if(res1.affectedRows>0){
+				return(
+					res.status(200).send({
+						mensaje:'Se ha subido la fotografia de manera exitosa',
+						mensajeFoto:'Se actualizo la base de datos',
+						resultado: res1,
+
+										})
+					)
+			}
+			else{
+				res.status(103).send({
+					mensaje:'Se ha subido la fotografia de manera exitosa',
+					mensajeFoto:'No fue posible actualizar la base de datos, contacte al administrador',
+					resultado: res1,
+
+				})
+			}
+	
+	}) 
+
+});
+});
+const eliminarFoto = (foto) => {
+	var fs = require('fs');
+	fs.stat(`./imagenes/${foto}`, (err)=> {
+		if(err || foto==='default.png') {
+			return (err?err:'es default.png');
+		}
+		fs.unlink(`./imagenes/${foto}`,(err)=>{
+			if(err) {
+				return (err);
+			} 
+			return ('archivo eliminado');
+		})
+
+	})
+}
 app.all('*', (req,res)=>{
 	res.send('Esta ruta no existe');
 });
-
 app.listen(port, ()=>{
-	console.log(`Escuchando por el puerto ${port}`);
+	console.log(`Escuchando por el puerto ${port}`, (err)=>{
+		if(err){
+			return (err);
+		}
+		return ('archivo eliminado');
+	});
 });
