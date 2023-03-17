@@ -112,8 +112,8 @@ const ProfesorHome = () => {
 			<Col>
 			<Image
 				src={`http://localhost:5000/img/${foto}`}
-				width="100"
-				height="100"
+				width="300"
+				height="300"
 				roundedCircle={true}
 				className="mt-3"
 			>
